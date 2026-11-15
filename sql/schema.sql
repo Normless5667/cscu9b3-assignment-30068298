@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Hospital Asset & Maintenance Internal Control System
 -- CSCU9B3 Database Assignment - Schema, data load and sample inserts
--- Target: MySQL 8.x, engine InnoDB, charset utf8mb4
+-- Target: MySQL 8.0, engine InnoDB, charset utf8mb4
 -- =====================================================================
 
 CREATE DATABASE IF NOT EXISTS hospital_ic
@@ -12,11 +12,12 @@ USE hospital_ic;
 -- 1. DEPARTMENT: hospital units that own and use assets.
 -- ---------------------------------------------------------------------
 CREATE TABLE department (
-  dept_id       INT          NOT NULL,
-  dept_name     VARCHAR(60)  NOT NULL,
-  floor         INT          NOT NULL,
+  dept_id       INT           NOT NULL,
+  dept_name     VARCHAR(60)   NOT NULL,
+  floor         INT           NOT NULL,
   budget_annual DECIMAL(12,2) NOT NULL,
-  PRIMARY KEY (dept_id)
+  PRIMARY KEY (dept_id),
+  UNIQUE (dept_name)
 );
 
 -- ---------------------------------------------------------------------
@@ -28,7 +29,8 @@ CREATE TABLE supplier (
   contact_phone VARCHAR(30) NOT NULL,
   city          VARCHAR(40) NOT NULL,
   rating        INT         NOT NULL CHECK (rating BETWEEN 1 AND 5),
-  PRIMARY KEY (supplier_id)
+  PRIMARY KEY (supplier_id),
+  UNIQUE (supplier_name)
 );
 
 -- ---------------------------------------------------------------------

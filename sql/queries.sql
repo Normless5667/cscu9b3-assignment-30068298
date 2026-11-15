@@ -45,8 +45,8 @@ ORDER BY cost DESC;
 -- ---------------------------------------------------------------------
 -- Query 4: GROUP BY with SUM and AVG.
 -- Control question: how much maintenance money does each unit burn
--- per device, and in total? Units whose repair spend runs far ahead
--- of their peers are either underfunded or sitting on ageing
+-- per repair visit, and in total? Units whose repair spend runs far
+-- ahead of their peers are either underfunded or sitting on ageing
 -- equipment -- both matter for next year's budget review.
 -- ---------------------------------------------------------------------
 SELECT d.dept_name,
@@ -60,16 +60,16 @@ GROUP BY d.dept_name
 ORDER BY total_spend DESC;
 
 -- ---------------------------------------------------------------------
--- Query 5: IN on a list of high-risk units.
--- Control question: list every device held by the units where a
--- failure endangers patients directly. These units get a mandatory
--- quarterly equipment check, so the list drives the inspection plan.
+-- Query 5: IN on a single entity (critical-care equipment categories).
+-- Control question: list every device in the four critical-care
+-- categories where an equipment failure endangers patients directly.
+-- These categories get a mandatory quarterly inspection, so this
+-- single-entity subset drives the engineering inspection plan.
 -- ---------------------------------------------------------------------
-SELECT a.asset_tag, a.asset_name, a.category, d.dept_name
-FROM asset a
-JOIN department d ON d.dept_id = a.dept_id
-WHERE d.dept_name IN ('Intensive Care Unit', 'Operating Theatre', 'Emergency Department')
-ORDER BY d.dept_name, a.asset_tag;
+SELECT asset_tag, asset_name, category, price, dept_id
+FROM asset
+WHERE category IN ('Emergency', 'Respiratory', 'Infusion', 'Anaesthesia')
+ORDER BY category, asset_tag;
 
 -- ---------------------------------------------------------------------
 -- Query 6: UPDATE affecting at least three rows.
@@ -78,10 +78,14 @@ ORDER BY d.dept_name, a.asset_tag;
 -- every REVIEWED record (6 rows with the sample data), which is the
 -- month-end step of the audit workflow.
 -- ---------------------------------------------------------------------
+START TRANSACTION;
+
 UPDATE maintenance_log
 SET audit_status = 'AUDITED'
 WHERE audit_status = 'REVIEWED';
 
-SELECT asset_tag, service_no, audit_status
+COMMIT;
+
+SELECT asset_tag, service_no, service_date, cost, issue_desc, audit_status
 FROM maintenance_log
 ORDER BY audit_status, asset_tag, service_no;

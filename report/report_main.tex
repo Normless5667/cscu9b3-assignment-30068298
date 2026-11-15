@@ -1,22 +1,13 @@
 % =====================================================================
 % CSCU9B3 Relational Database Assignment — Report source (IEEEtran)
-% Compile with pdfLaTeX (Overleaf: New Project -> Upload this folder).
-%
-% IMPORTANT NOTES FOR YOU (delete these comment blocks before compiling):
-%  * No name anywhere. The author field carries ONLY the student number.
-%  * The AIAS Level 2 declaration table required by the cover sheet is
-%    filled in separately on the cover page of your submission — declare
-%    honestly what AI assistance you received and how you verified it.
-%  * Read every section and rewrite sentences into your own voice where
-%    they do not sound like you. You must be able to defend every design
-%    decision in a viva.
-%  * Page target: 10--14 pages. This source compiles to roughly that.
+% Student Number: 30068298
 % =====================================================================
 \documentclass[conference]{IEEEtran}
 
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{listings}
+\usepackage{textcomp}
 \usepackage{xcolor}
 \usepackage{url}
 
@@ -26,9 +17,12 @@
   keywordstyle=\bfseries,
   commentstyle=\itshape\color{gray},
   showstringspaces=false,
+  upquote=true,
   breaklines=true,
   frame=single,
   framerule=0.3pt,
+  aboveskip=8pt,
+  belowskip=6pt,
   columns=flexible,
   keepspaces=true
 }
@@ -53,9 +47,9 @@ control of hospital fixed assets and their maintenance history. Four entities
 (DEPARTMENT, SUPPLIER, ASSET and MAINTENANCE\_LOG) capture who owns each
 device, who supplied it, and every repair visit it undergoes, with an audit
 status workflow on each maintenance record. The design is expressed as an
-entity--relationship diagram in Chen notation, argued to third normal form,
-and implemented in MySQL 8.4 with referential integrity constraints and a
-composite primary key. Sample data is bulk loaded from delimited text files,
+entity--relationship diagram in Chen notation, argued to third normal form
+(and Boyce--Codd normal form), and implemented in MySQL 8.0 with referential
+integrity constraints and a composite primary key. Sample data is bulk loaded from delimited text files,
 and a suite of six queries demonstrates the control questions the system
 answers: tracing procurement accountability, flagging unusually expensive
 repairs, comparing maintenance spend between units, listing equipment in
@@ -185,10 +179,10 @@ and from a need to the technique that satisfies it.
 \textbf{Question the control team asks} & \textbf{Technique} & \textbf{Query} \\
 \midrule
 Which devices entered service in the last procurement year? & \texttt{LIKE} on asset tag & Q1 \\
-Who supplied the device behind this repair, and which unit pays for it? & three-table \texttt{JOIN} & Q2 \\
+Who supplied each device, and which hospital unit owns it? & three-table \texttt{JOIN} & Q2 \\
 Which repairs cost more than the hospital average, i.e.\ where should we look first? & \texttt{>} comparison & Q3 \\
-What does each unit spend on repairs per year, against its budget? & \texttt{GROUP BY} + aggregates & Q4 \\
-Which devices sit in the units where downtime is unacceptable? & \texttt{IN} list & Q5 \\
+What does each unit spend on repairs in total and per visit? & \texttt{GROUP BY} + aggregates & Q4 \\
+Which critical-care devices require mandatory quarterly checks? & \texttt{IN} on single entity & Q5 \\
 Close the month: mark the checked visits as audited & \texttt{UPDATE} (multi-row) & Q6 \\
 \bottomrule
 \end{tabular}
@@ -212,7 +206,7 @@ contains four entities:
         contact\_phone, city, rating)
   \item \textbf{ASSET}(\underline{asset\_tag}, asset\_name, category,
         purchase\_date, price, \textit{dept\_id}, \textit{supplier\_id})
-  \item \textbf{MAINTENANCE\_LOG}(\underline{asset\_tag},
+  \item \textbf{MAINTENANCE\_LOG}(\underline{\textit{asset\_tag}},
         \underline{service\_no}, service\_date, cost, technician,
         issue\_desc, audit\_status)
 \end{itemize}
@@ -281,27 +275,32 @@ no partial dependency exists and the table is in 2NF.
 
 \subsection{Third Normal Form}
 In DEPARTMENT, floor and budget\_annual depend only on the department
-itself. A stricter designer might argue that \emph{floor} really describes
-the building and split out a BUILDING relation; since the case study treats
-one site, an extra table would add join cost without adding control value,
-and the trade-off is accepted consciously. In SUPPLIER, city and rating
-describe the supplier, not any equipment it sold. In ASSET, purchase date
-and price depend on the asset; category is the one borderline attribute
+itself, and \texttt{dept\_name} carries a \texttt{UNIQUE} constraint as an
+alternate candidate key. A stricter designer might argue that \emph{floor}
+really describes the building and split out a BUILDING relation; since the
+case study treats one site, an extra table would add join cost without adding
+control value, and the trade-off is accepted consciously. In SUPPLIER,
+\texttt{supplier\_name} is likewise constrained \texttt{UNIQUE}, and city and
+rating describe the supplier, not any equipment it sold. In ASSET, purchase
+date and price depend on the asset; category is the one borderline attribute
 --- if the hospital later tracked per-category inspection intervals,
 category would deserve its own relation ASSET\_CATEGORY(category,
-inspection\_interval). At the current scale of four categories and an
-inspection schedule held outside the database, keeping it as a plain
-attribute is justified, and this is recorded here as a deliberate decision
-rather than an oversight.
+inspection\_interval). At the current scale of ten categories across the
+sample inventory and an inspection schedule held outside the database,
+keeping it as a plain attribute is justified, and this is recorded here as a
+deliberate decision rather than an oversight.
 
-In MAINTENANCE\_LOG, \emph{technician} is the notable 3NF candidate: the
-name could be moved to a TECHNICIAN relation with attributes such as
-speciality or base unit. The system, however, does not manage staff --- it
-only records who attended --- so a VARCHAR keeps the schema lean. Finally,
-no non-key attribute determines any other: knowing the fault description
-does not determine the cost, and the date does not determine the technician.
-Consequently every determinant is a candidate key and the relation also
-meets BCNF.
+In MAINTENANCE\_LOG, \emph{technician} is the notable design choice: if the
+database also stored staff attributes such as certification grade or contact
+telephone, keeping them in MAINTENANCE\_LOG would introduce a transitive
+dependency $(\text{asset\_tag}, \text{service\_no}) \rightarrow
+\text{technician} \rightarrow \text{grade}$. Because the system does not
+manage staff and records only the attending engineer's name as a single
+atomic attribute, no transitive functional dependency arises in the table.
+Finally, no non-key attribute determines any other: knowing the fault
+description does not determine the cost, and the date does not determine the
+technician. Consequently every non-trivial determinant across all four tables
+is a candidate key, satisfying both 3NF and BCNF.
 
 \section{Design Alternatives Considered}
 Three decisions could reasonably have gone the other way. Naming the
@@ -344,16 +343,18 @@ the computation is too slow --- and no measurement here does.
 
 \section{Physical Implementation}
 \subsection{Choice of Data Types}
-MySQL 8.4 (InnoDB, utf8mb4)~\cite{mysql} was used. Monetary values use
+MySQL 8.0 (InnoDB, utf8mb4)~\cite{mysql} was used. Monetary values use
 \texttt{DECIMAL(12,2)} rather than FLOAT because currency must not suffer
 binary rounding. Asset tags use \texttt{VARCHAR(12)}: the pattern
 \texttt{AST-YYYY-NNN} fits comfortably with headroom. Audit status is
 enforced with a \texttt{CHECK} constraint on the three legal states, and
 supplier rating with a range \texttt{CHECK} between 1 and 5 --- turning two
-business rules into database-enforced facts. No secondary index was declared
-by hand: InnoDB indexes every foreign-key column automatically, so the joins in
-Section~\ref{sec:queries} use the \texttt{dept\_id} and \texttt{supplier\_id}
-indexes that the engine created with the constraints.
+business rules into database-enforced facts. No additional secondary index
+was declared by hand: InnoDB automatically creates indexes on primary-key,
+\texttt{UNIQUE} and foreign-key columns (\texttt{dept\_id} and
+\texttt{supplier\_id} on \texttt{asset}), which support referential-integrity
+checks and parent-to-child lookups while child-to-parent joins probe the
+parent tables' \texttt{PRIMARY} key indexes directly.
 
 \subsection{Schema Definition}
 Listing~\ref{lst:schema} shows the two most instructive tables; the full
@@ -363,29 +364,34 @@ Appendix~\ref{app:data}.
 
 \begin{lstlisting}[style=sqlstyle, caption={Core DDL (excerpt from schema.sql)}, label={lst:schema}]
 CREATE TABLE asset (
-  asset_tag    VARCHAR(12)   NOT NULL,
-  asset_name   VARCHAR(80)   NOT NULL,
-  category     VARCHAR(30)   NOT NULL,
-  purchase_date DATE         NOT NULL,
-  price        DECIMAL(12,2) NOT NULL,
-  dept_id      INT           NOT NULL,
-  supplier_id  INT           NOT NULL,
+  asset_tag     VARCHAR(12)   NOT NULL,
+  asset_name    VARCHAR(80)   NOT NULL,
+  category      VARCHAR(30)   NOT NULL,
+  purchase_date DATE          NOT NULL,
+  price         DECIMAL(12,2) NOT NULL,
+  dept_id       INT           NOT NULL,
+  supplier_id   INT           NOT NULL,
   PRIMARY KEY (asset_tag),
-  FOREIGN KEY (dept_id)     REFERENCES department(dept_id),
-  FOREIGN KEY (supplier_id) REFERENCES supplier(supplier_id)
+  FOREIGN KEY (dept_id)
+    REFERENCES department(dept_id),
+  FOREIGN KEY (supplier_id)
+    REFERENCES supplier(supplier_id)
 );
 
 CREATE TABLE maintenance_log (
-  asset_tag     VARCHAR(12)   NOT NULL,
-  service_no    INT           NOT NULL,
-  service_date  DATE          NOT NULL,
-  cost          DECIMAL(10,2) NOT NULL,
-  technician    VARCHAR(60)   NOT NULL,
-  issue_desc    VARCHAR(200)  NOT NULL,
-  audit_status  VARCHAR(10)   NOT NULL DEFAULT 'PENDING',
+  asset_tag    VARCHAR(12)   NOT NULL,
+  service_no   INT           NOT NULL,
+  service_date DATE          NOT NULL,
+  cost         DECIMAL(10,2) NOT NULL,
+  technician   VARCHAR(60)   NOT NULL,
+  issue_desc   VARCHAR(200)  NOT NULL,
+  audit_status VARCHAR(10)   NOT NULL
+               DEFAULT 'PENDING',
   PRIMARY KEY (asset_tag, service_no),
-  FOREIGN KEY (asset_tag) REFERENCES asset(asset_tag),
-  CHECK (audit_status IN ('PENDING','REVIEWED','AUDITED'))
+  FOREIGN KEY (asset_tag)
+    REFERENCES asset(asset_tag),
+  CHECK (audit_status IN
+    ('PENDING','REVIEWED','AUDITED'))
 );
 \end{lstlisting}
 
@@ -410,25 +416,25 @@ control habit in itself --- ambiguous columns become ambiguous audits.
 \begin{table}[!t]
 \caption{Data dictionary (condensed)}
 \label{tab:dict}
-\small
-\begin{tabular}{p{2.4cm}p{1.6cm}p{3.1cm}}
+\footnotesize
+\begin{tabular}{p{2.9cm}p{1.9cm}p{2.7cm}}
 \toprule
 \textbf{Column} & \textbf{Type} & \textbf{Rule enforced} \\
 \midrule
 department.dept\_id & INT & PK, surrogate \\
-department.dept\_name & VARCHAR(60) & NOT NULL \\
+department.dept\_name & VARCHAR(60) & NOT NULL, UNIQUE \\
 department.floor & INT & NOT NULL \\
 department.budget\_annual & DECIMAL(12,2) & NOT NULL \\
 supplier.supplier\_id & INT & PK, surrogate \\
-supplier.supplier\_name & VARCHAR(80) & NOT NULL \\
+supplier.supplier\_name & VARCHAR(80) & NOT NULL, UNIQUE \\
 supplier.rating & INT & CHECK 1--5 \\
-asset.asset\_tag & VARCHAR(12) & PK, format AST-YYYY-NNN \\
+asset.asset\_tag & VARCHAR(12) & PK, AST-YYYY-NNN \\
 asset.price & DECIMAL(12,2) & NOT NULL \\
 asset.dept\_id & INT & FK $\rightarrow$ department \\
 asset.supplier\_id & INT & FK $\rightarrow$ supplier \\
-log.asset\_tag + log.service\_no & VARCHAR(12) + INT & composite PK, FK pair \\
+log.(asset\_tag, service\_no) & VARCHAR(12), INT & composite PK, FK \\
 log.cost & DECIMAL(10,2) & NOT NULL, $\geq 0$ \\
-log.audit\_status & VARCHAR(10) & CHECK in \{PENDING, REVIEWED, AUDITED\} \\
+log.audit\_status & VARCHAR(10) & CHECK in 3 states \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -473,12 +479,13 @@ physics, enforced by the engine on every write.
 Three properties beyond the constraints deserve a note, because a control
 system is judged on them as much as on its tables.
 
-\textbf{Transaction boundaries.} Month-end closure touches many rows at once.
-Query 6 runs inside an explicit transaction so that a crash halfway through
-leaves the table unchanged: \texttt{START TRANSACTION; UPDATE \dots; COMMIT;}
-The engine's default isolation level (REPEATABLE READ) prevents a concurrent
-auditor from seeing a half-closed month, which is the failure mode that
-matters during a close.
+\textbf{Transaction boundaries.} Month-end closure updates all reviewed rows
+and immediately verifies the resulting queue state. While InnoDB executes any
+single \texttt{UPDATE} statement atomically, Query 6 wraps the month-end
+update in an explicit transaction (\texttt{START TRANSACTION; UPDATE \dots;
+COMMIT;}) under the engine's default \texttt{REPEATABLE READ} isolation level
+so that the close workflow can be extended with audit-log inserts without
+exposing a partially closed state to concurrent readers.
 
 \textbf{Referential actions.} All foreign keys were created without
 \texttt{ON DELETE CASCADE}. Deleting a department should be refused while
@@ -525,7 +532,7 @@ floating-point noise.
 
 \section{The Query Suite}\label{sec:queries}
 Six queries follow, each answering a question a control team actually asks.
-All were executed against the loaded database on MySQL 8.4. Before each
+All were executed against the loaded database on MySQL 8.0.46. Before each
 result, the question is stated in business terms, so that the SQL reads as an
 answer rather than as a syntax demonstration.
 
@@ -685,38 +692,37 @@ and should be read as an illustration of the query pattern rather than as a
 management finding; with a full year of data the same statement produces
 comparable averages.
 
-\subsection{Query 5: High-Risk Inventory with IN}\label{sec:q5}
-Units where a device failure endangers patients directly (ICU, Operating
-Theatre, Emergency Department) receive a mandatory quarterly check. The
-\texttt{IN} predicate selects exactly that list (Table~\ref{tab:q5}).
+\subsection{Query 5: High-Risk Inventory with IN on a Single Entity}\label{sec:q5}
+Devices in the four critical-care categories (Emergency, Respiratory,
+Infusion and Anaesthesia), where an equipment failure endangers patients
+directly, receive a mandatory quarterly check. Applying the \texttt{IN}
+predicate directly to the \texttt{asset} entity selects that subset without
+requiring a join (Table~\ref{tab:q5}).
 
 \begin{lstlisting}[style=sqlstyle]
-SELECT a.asset_tag, a.asset_name, a.category, d.dept_name
-FROM asset a
-JOIN department d ON d.dept_id = a.dept_id
-WHERE d.dept_name IN
-      ('Intensive Care Unit', 'Operating Theatre',
-       'Emergency Department')
-ORDER BY d.dept_name, a.asset_tag;
+SELECT asset_tag, asset_name, category, price, dept_id
+FROM asset
+WHERE category IN
+      ('Emergency', 'Respiratory',
+       'Infusion', 'Anaesthesia')
+ORDER BY category, asset_tag;
 \end{lstlisting}
 
 \begin{table}[!t]
-  \caption{Query 5 result: equipment in high-risk units (department names
-  as stored).}
+  \caption{Query 5 result: critical-care equipment selected from \texttt{asset}.}
   \label{tab:q5}
   \centering
   \footnotesize
-  \resizebox{\columnwidth}{!}{%
-  \begin{tabular}{llll}
+  \begin{tabular}{lllrr}
     \toprule
-    asset\_tag & asset\_name & category & dept\_name \\
+    asset\_tag & asset\_name & category & price & dept\_id \\
     \midrule
-    AST-2023-003 & Defibrillator X9 & Emergency & Emergency Department \\
-    AST-2023-001 & Ventilator V300 & Respiratory & Intensive Care Unit \\
-    AST-2024-002 & Infusion Pump IP8 & Infusion & Intensive Care Unit \\
-    AST-2023-002 & Anaesthesia Machine AM5 & Anaesthesia & Operating Theatre \\
+    AST-2023-002 & Anaesthesia Machine AM5 & Anaesthesia & 215000.00 & 2 \\
+    AST-2023-003 & Defibrillator X9 & Emergency & 68000.00 & 3 \\
+    AST-2024-002 & Infusion Pump IP8 & Infusion & 18500.00 & 1 \\
+    AST-2023-001 & Ventilator V300 & Respiratory & 128000.00 & 1 \\
     \bottomrule
-  \end{tabular}}
+  \end{tabular}
 \end{table}
 
 \subsection{Query 6: Closing the Audit Cycle with UPDATE}\label{sec:q6}
@@ -725,18 +731,23 @@ receives the final \texttt{AUDITED} stamp --- a bulk update of six rows with
 the sample data.
 
 \begin{lstlisting}[style=sqlstyle]
+START TRANSACTION;
+
 UPDATE maintenance_log
 SET audit_status = 'AUDITED'
 WHERE audit_status = 'REVIEWED';
 
-SELECT asset_tag, service_no, audit_status
+COMMIT;
+
+SELECT asset_tag, service_no, service_date,
+       cost, issue_desc, audit_status
 FROM maintenance_log
 ORDER BY audit_status, asset_tag, service_no;
 \end{lstlisting}
 
-In a live system the statement would run inside an explicit transaction
-(\texttt{START TRANSACTION} \dots{} \texttt{COMMIT}) so that a failure halfway
-through cannot leave the month-end close partially applied. The verification
+Running the update inside an explicit transaction (\texttt{START TRANSACTION}
+\dots{} \texttt{COMMIT}) ensures a clean transactional boundary for the
+month-end close. The verification
 query afterwards shows 9 records \texttt{AUDITED}, 7 \texttt{PENDING} and
 none left \texttt{REVIEWED}, demonstrating that the month-end close empties
 the review queue. The \texttt{CHECK} constraint on
@@ -750,7 +761,7 @@ records what was checked, what result was expected, and what MySQL actually
 returned, so that a reader can repeat every line.
 
 \begin{table}[!t]
-\caption{Test log: every check passed on MySQL 8.4.9.}
+\caption{Test log: every check passed on MySQL 8.0.46.}
 \label{tab:tests}
 \footnotesize
 \begin{tabular}{p{0.3cm}p{2.6cm}p{2.3cm}p{0.9cm}}
@@ -767,7 +778,7 @@ T7 & Q1: 2024 tags only & 6 rows & pass \\
 T8 & Q2: no orphan joins & 13 rows, no NULL & pass \\
 T9 & Q3: all above 18,150.00 & 2 rows & pass \\
 T10 & Q4: groups sum to total & 290,400.00 & pass \\
-T11 & Q5: three high-risk units & 4 devices & pass \\
+T11 & Q5: critical-care categories & 4 devices & pass \\
 T12 & Q6: \texttt{REVIEWED} drained & 6 rows, 0 left & pass \\
 \bottomrule
 \end{tabular}
@@ -799,7 +810,7 @@ reasoning that would matter at hospital scale.
 \caption{\texttt{EXPLAIN} output for four representative queries.}
 \label{tab:explain}
 \footnotesize
-\begin{tabular}{p{0.5cm}p{1.3cm}p{0.9cm}p{1.5cm}p{0.5cm}p{1.9cm}}
+\begin{tabular}{p{0.35cm}p{1.85cm}p{0.75cm}p{1.2cm}p{0.45cm}p{1.9cm}}
 \toprule
 \textbf{Q} & \textbf{Table} & \textbf{type} & \textbf{key} & \textbf{rows} & \textbf{Extra} \\
 \midrule
@@ -810,6 +821,7 @@ reasoning that would matter at hospital scale.
 3 & maintenance\_log & ALL & NULL & 16 & Using where \\
 4 & maintenance\_log & ALL & NULL & 16 & temporary; filesort \\
 4 & asset (a) & eq\_ref & PRIMARY & 1 & --- \\
+4 & department (d) & eq\_ref & PRIMARY & 1 & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -822,7 +834,9 @@ the \texttt{key\_len} of 50 on \texttt{asset} is what a \texttt{VARCHAR(12)}
 utf8mb4 key costs --- exactly 12~$\times$~4 bytes plus two length bytes. That
 number is a useful sanity check: if a future migration changed the tag to
 \texttt{VARCHAR(30)}, every join in the suite would widen by nearly three
-times, which is the strongest argument for keeping the surrogate keys narrow.
+times, which is the strongest argument for keeping natural business keys
+compact and using narrow 4-byte integer surrogate keys on DEPARTMENT and
+SUPPLIER.
 
 \textbf{Why Query 1 uses an index and a lookalike would not.} The prefix
 pattern \texttt{'AST-2024-\%'} becomes a \texttt{range} scan on \texttt{PRIMARY}
@@ -834,10 +848,13 @@ than a prose description.
 
 \textbf{Where the plan would bite at scale.} Two entries in the table are
 warnings for a larger database. \texttt{Using temporary; Using filesort} on
-Query 4 means the grouping is materialised in a temporary table; with 50,000
-visits the fix is either an index on \texttt{(dept\_id)} so that grouping can
-follow the index order, or grouping by \texttt{dept\_id} and joining the name
-afterwards. Query 3's subquery already runs once rather than per row (its
+Query 4 means the grouping by \texttt{d.dept\_name} is materialised in a
+temporary table and then sorted by the computed aggregate \texttt{total\_spend
+DESC} (\texttt{SUM(m.cost)}), which no B-tree index can pre-sort; with 50,000
+visits, grouping by the 4-byte integer \texttt{a.dept\_id} in a derived table
+and joining \texttt{department} afterwards shrinks the temporary aggregation
+key and avoids carrying \texttt{VARCHAR(60)} strings through the group step.
+Query 3's subquery already runs once rather than per row (its
 \texttt{select\_type} is \texttt{SUBQUERY}, not \texttt{DEPENDENT SUBQUERY}),
 but both sides of the comparison scan the table; the production version would
 keep the monthly average in a summary table and index \texttt{cost}.
@@ -887,14 +904,18 @@ pipeline is the realistic answer.
 \section{Reflection}\label{sec:reflection}
 \subsection{What Changed After Seeing Real Data}
 The first draft of the schema put the technician's name in a free-text
-column and stopped there. Once fifteen plausible rows were typed in, the
-same three names kept reappearing with different spellings, which is exactly
-the update anomaly that motivated the third-normal-form argument in
-Section~\ref{sec:normalisation}. The choice to keep the name denormalised was
-therefore made deliberately rather than by omission: the column is a printed
-label on a work order, not an entity the control team queries by. Had the
-scenario included technician certification or workload analysis, a fifth
-entity would have been required, and the design would have changed.
+column and stopped there. Once the sixteen sample visits were entered across
+seven recurring engineer names (\texttt{Chen Wei}, \texttt{Liu Fang},
+\texttt{Wang Lei}, \texttt{Sun Jia}, \texttt{Zhou Qin}, \texttt{Gao Yuan} and
+\texttt{Li Na}), the trade-off explained in Section~\ref{sec:normalisation}
+became concrete: without a separate lookup table, nothing prevents a name from
+being mistyped on a future visit, and if staff attributes such as
+certification grade or contact phone were added later, repeating them on every
+visit would create a classic 3NF update anomaly. Keeping \texttt{technician}
+as a single atomic label was therefore a deliberate scope boundary: the column
+is a printed name on a work order, not an entity the control team queries by.
+Had the scenario included technician certification or workload analysis, a
+fifth entity would have been required, and the design would have changed.
 
 \subsection{What the Exercise Taught About Scope}
 The hardest part was not writing SQL but resisting it. Every additional
@@ -964,8 +985,9 @@ A four-entity relational model --- departments, suppliers, assets and
 maintenance visits --- captures the accountability chain of hospital
 equipment: every device has an owner and a vendor, every repair has a
 record, and every record has an audit state. The design is in third normal
-form, enforces its business rules through keys, foreign keys and CHECK
-constraints, and was implemented and populated on MySQL 8.4 from delimited
+form (and Boyce--Codd normal form), enforces its business rules through keys,
+foreign keys, \texttt{UNIQUE} and \texttt{CHECK}
+constraints, and was implemented and populated on MySQL 8.0 from delimited
 text files. Six queries demonstrated that the questions internal control
 actually asks --- procurement tracing, red-flag spending, unit-level budget
 review, high-risk inventory and bulk audit closure --- fall out of the model
@@ -1121,18 +1143,18 @@ AST-2025-001 & X-Ray Mobile XR1 & NorthTech Instruments & London & Radiology & 2
 \end{table*}
 
 \begin{table}[!t]
-\caption{Query 5, complete output: devices in the three high-risk units.}
+\caption{Query 5, complete output: critical-care devices selected from \texttt{asset}.}
 \label{tab:q5full}
 \centering
 \footnotesize
-\begin{tabular}{llll}
+\begin{tabular}{lllrr}
 \toprule
-asset\_tag & asset\_name & category & dept\_name \\
+asset\_tag & asset\_name & category & price & dept\_id \\
 \midrule
-AST-2023-003 & Defibrillator X9 & Emergency & Emergency Department \\
-AST-2023-001 & Ventilator V300 & Respiratory & Intensive Care Unit \\
-AST-2024-002 & Infusion Pump IP8 & Infusion & Intensive Care Unit \\
-AST-2023-002 & Anaesthesia Machine AM5 & Anaesthesia & Operating Theatre \\
+AST-2023-002 & Anaesthesia Machine AM5 & Anaesthesia & 215000.00 & 2 \\
+AST-2023-003 & Defibrillator X9 & Emergency & 68000.00 & 3 \\
+AST-2024-002 & Infusion Pump IP8 & Infusion & 18500.00 & 1 \\
+AST-2023-001 & Ventilator V300 & Respiratory & 128000.00 & 1 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1182,7 +1204,8 @@ CREATE TABLE department (
   dept_name     VARCHAR(60)   NOT NULL,
   floor         INT           NOT NULL,
   budget_annual DECIMAL(12,2) NOT NULL,
-  PRIMARY KEY (dept_id)
+  PRIMARY KEY (dept_id),
+  UNIQUE (dept_name)
 );
 
 CREATE TABLE supplier (
@@ -1192,7 +1215,8 @@ CREATE TABLE supplier (
   city          VARCHAR(40) NOT NULL,
   rating        INT         NOT NULL
                 CHECK (rating BETWEEN 1 AND 5),
-  PRIMARY KEY (supplier_id)
+  PRIMARY KEY (supplier_id),
+  UNIQUE (supplier_name)
 );
 
 CREATE TABLE asset (
@@ -1276,8 +1300,8 @@ R.~Elmasri and S.~B. Navathe, \emph{Fundamentals of Database Systems},
 7th ed. Boston: Pearson, 2016.
 
 \bibitem{mysql}
-Oracle Corporation, \emph{MySQL 8.4 Reference Manual}, 2024.
-[Online]. Available: \url{https://dev.mysql.com/doc/refman/8.4/en/}
+Oracle Corporation, \emph{MySQL 8.0 Reference Manual}, 2024.
+[Online]. Available: \url{https://dev.mysql.com/doc/refman/8.0/en/}
 
 \bibitem{iso}
 International Organization for Standardization, \emph{ISO 19011:2018 ---
