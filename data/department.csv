@@ -1,0 +1,11 @@
+dept_id,dept_name,floor,budget_annual
+1,Intensive Care Unit,3,850000
+2,Operating Theatre,3,620000
+3,Emergency Department,1,540000
+4,Radiology,2,710000
+5,Cardiology,4,430000
+6,Pharmacy,1,300000
+7,Laboratory,2,380000
+8,Dialysis Unit,4,410000
+9,General Ward East,5,260000
+10,Maternity,2,320000

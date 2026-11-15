@@ -1,0 +1,11 @@
+supplier_id,supplier_name,contact_phone,city,rating
+1,MedEquip GmbH,+49-30-552188,Berlin,4
+2,Shanghai Medical Devices,+86-21-64829103,Shanghai,5
+3,NorthTech Instruments,+44-20-74113290,London,3
+4,Guangzhou Care Labs,+86-20-87332215,Guangzhou,4
+5,BioScan Systems,+1-617-2248871,Boston,5
+6,CleanFlow Equipment,+86-10-59903344,Beijing,3
+7,Pacific Med Supply,+65-63391208,Singapore,4
+8,Shenzhen Precision Med,+86-755-26779910,Shenzhen,2
+9,Hangzhou Lab Partners,+86-571-88021144,Hangzhou,3
+10,Tianjin Device Union,+86-22-27355480,Tianjin,2

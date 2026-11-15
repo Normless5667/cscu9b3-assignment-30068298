@@ -1,0 +1,16 @@
+asset_tag,service_no,service_date,cost,technician,issue_desc,audit_status
+AST-2023-001,1,2024-02-11,1450.00,Chen Wei,Alarm module replacement,AUDITED
+AST-2023-001,2,2025-05-06,3820.00,Liu Fang,Flow sensor fault,REVIEWED
+AST-2023-002,1,2024-04-19,9200.00,Zhao Ming,Vaporizer calibration,AUDITED
+AST-2023-003,1,2024-08-02,6400.00,Sun Jia,Battery pack replacement,REVIEWED
+AST-2023-004,1,2024-06-15,54000.00,Wang Lei,Tube and detector service,REVIEWED
+AST-2023-004,2,2025-09-01,168000.00,Wang Lei,Gantry bearing failure,PENDING
+AST-2023-005,1,2024-12-03,3800.00,Zhou Qin,Probe recalibration,AUDITED
+AST-2024-001,1,2025-03-14,2100.00,Li Na,Lead cable replacement,REVIEWED
+AST-2024-002,1,2025-01-27,960.00,Chen Wei,Door latch fault,PENDING
+AST-2024-002,2,2025-07-18,1240.00,Chen Wei,Peristaltic tube kit,PENDING
+AST-2024-003,1,2025-04-09,15600.00,Gao Yuan,Dialysate pump seal,REVIEWED
+AST-2024-004,1,2025-06-21,8900.00,Liu Fang,Optical module cleaning,PENDING
+AST-2024-005,1,2025-05-30,1450.00,Sun Jia,Screen flicker repair,PENDING
+AST-2024-006,1,2025-10-12,5200.00,Zhou Qin,Humidity sensor swap,REVIEWED
+AST-2025-001,1,2025-11-04,7400.00,Gao Yuan,Collimator alignment,PENDING
